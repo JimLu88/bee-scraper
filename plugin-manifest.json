@@ -1,0 +1,11 @@
+{
+  "name": "bee-scraper",
+  "version": "0.1.0",
+  "purpose": "14 站点 + 13 搜索源 + AI 规划员",
+  "port": 8003,
+  "auth": { "type": "bearer", "env_var": "BEE_BEARER_TOKEN" },
+  "endpoints": [
+    {"method": "GET",  "path": "/healthz"},
+    {"method": "GET",  "path": "/manifest"}
+  ]
+}
