@@ -56,17 +56,31 @@ def fetch_og_image(url: str, timeout: float = 8.0) -> str:
     return ""
 
 
-def enrich_images(items: list[dict[str, Any]], max_fetch: int = 6) -> list[dict[str, Any]]:
-    """对前 max_fetch 条没有 image_url 的项, 抓 og:image 补图 (限量防慢)."""
-    fetched = 0
-    for it in items:
-        if fetched >= max_fetch:
-            break
-        if not it.get("image_url") and it.get("url"):
-            img = fetch_og_image(str(it["url"]))
+def enrich_images(items: list[dict[str, Any]], max_fetch: int = 16) -> list[dict[str, Any]]:
+    """对没有 image_url 的项**并发**抓 og:image 补图 (限量防慢, 提高覆盖率).
+
+    旧版串行 + 只补前 6 条 → 大量卡片无图. 改 ThreadPool 并发 + 提额到 16,
+    单条 6s 超时, 总耗时约 ~一两轮, best-effort 不阻塞主流程.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    targets = [it for it in items if not it.get("image_url") and it.get("url")][:max_fetch]
+    if not targets:
+        return items
+
+    def _one(it: dict[str, Any]) -> None:
+        try:
+            img = fetch_og_image(str(it["url"]), timeout=6.0)
             if img:
                 it["image_url"] = img
-            fetched += 1
+        except Exception:
+            pass
+
+    try:
+        with ThreadPoolExecutor(max_workers=min(10, len(targets))) as ex:
+            list(ex.map(_one, targets))
+    except Exception:
+        pass
     return items
 
 
@@ -143,7 +157,7 @@ def site_search(domains: list[str], query: str, *, n: int = 8, enrich: bool = Tr
             it["kind"] = "site"
         kept = results
     if enrich:
-        kept = enrich_images(kept, max_fetch=5)
+        kept = enrich_images(kept, max_fetch=16)
     return kept[:n]
 
 
