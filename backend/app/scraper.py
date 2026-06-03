@@ -242,10 +242,24 @@ def _search_exa(query: str) -> list[dict[str, Any]]:
 SEARCH_FETCHERS = {"tavily": _search_tavily, "brave": _search_brave, "exa": _search_exa}
 
 
+def _apply_request_keys(req: Any) -> None:
+    """v9: 允许调用方(蜂群后端)随请求带搜索 key, 写入本进程 env, 让用户在前端填一次即可,
+    无需单独配爬虫容器的 env/.env。只在请求带了非空 key 时覆盖。"""
+    for field, env in (("tavily_api_key", "TAVILY_API_KEY"),
+                       ("exa_api_key", "EXA_API_KEY"),
+                       ("brave_api_key", "BRAVE_API_KEY")):
+        v = getattr(req, field, None)
+        if isinstance(v, str) and v.strip():
+            os.environ[env] = v.strip()
+
+
 class ScrapeTask(BaseModel):
     site: str
     keyword: str = ""
     limit: int = 20
+    tavily_api_key: str | None = None
+    exa_api_key: str | None = None
+    brave_api_key: str | None = None
 
 
 class AiPlanRequest(BaseModel):
@@ -255,10 +269,14 @@ class AiPlanRequest(BaseModel):
 class SearchQuery(BaseModel):
     query: str
     providers: list[str] = Field(default_factory=list)
+    tavily_api_key: str | None = None
+    exa_api_key: str | None = None
+    brave_api_key: str | None = None
 
 
 @router.post("/task")
 def submit_task(req: ScrapeTask) -> dict:
+    _apply_request_keys(req)
     if req.site not in SUPPORTED_SITES:
         raise HTTPException(400, f"unsupported site; use one of {SUPPORTED_SITES}")
     if req.site not in SITE_FETCHERS:
@@ -304,6 +322,7 @@ def ai_plan(req: AiPlanRequest) -> dict:
 
 @router.post("/search/query")
 def search_query(req: SearchQuery) -> dict:
+    _apply_request_keys(req)
     use = req.providers or ["tavily", "brave", "exa"]
     bad = [p for p in use if p not in SEARCH_PROVIDERS]
     if bad:
