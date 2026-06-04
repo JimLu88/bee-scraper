@@ -21,10 +21,11 @@ from typing import Any
 
 import httpx
 from bs4 import BeautifulSoup
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
 from . import platforms as _plat
+from . import scrape_guard as _guard
 
 router = APIRouter()
 
@@ -281,12 +282,21 @@ def submit_task(req: ScrapeTask) -> dict:
         raise HTTPException(400, f"unsupported site; use one of {SUPPORTED_SITES}")
     if req.site not in SITE_FETCHERS:
         raise HTTPException(501, f"site '{req.site}' not yet implemented")
+    # 反爬熔断(保命底): 已熔断则直接停, 根本不发请求, 直到人工 reset
+    allowed, why = _guard.check(req.site)
+    if not allowed:
+        return {"task_id": "", "status": "paused", "site": req.site,
+                "count": 0, "items": [], "guard": why}
     try:
         items = SITE_FETCHERS[req.site](req.keyword, req.limit)
-    except HTTPException:
+    except HTTPException as he:
+        if he.status_code in (403, 429):
+            _guard.record(req.site, "block")  # 被拦截信号 → 计入熔断
         raise
     except httpx.HTTPError as e:
+        _guard.record(req.site, "block")
         raise HTTPException(502, f"upstream fetch failed: {e!r}") from e
+    _guard.record(req.site, "empty" if not items else "ok")  # 上报本次信号
     tid = "s-" + uuid.uuid4().hex[:12]
     payload = {
         "task_id": tid, "site": req.site, "keyword": req.keyword,
@@ -297,6 +307,18 @@ def submit_task(req: ScrapeTask) -> dict:
     )
     return {"task_id": tid, "status": "done", "site": req.site,
             "count": len(items), "items": items}
+
+
+@router.get("/guard/status")
+def guard_status() -> dict:
+    """查看熔断状态(是否触发保命底、各平台连续空计数、阈值配置)。"""
+    return _guard.status()
+
+
+@router.post("/guard/reset")
+def guard_reset(body: dict = Body(default={})) -> dict:
+    """人工恢复抓取。body 可传 {"platform": "xiaohongshu"} 只恢复单平台;不传=全清。"""
+    return _guard.reset(body.get("platform"))
 
 
 @router.post("/ai-plan")
