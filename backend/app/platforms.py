@@ -391,6 +391,27 @@ def make_site_fetcher(platform: str) -> Callable[[str, int], list[dict[str, Any]
     domains = SITE_PLATFORMS[platform]
 
     def _fetch(keyword: str, n: int = 8) -> list[dict[str, Any]]:
+        # 优先 PC 端重爬(MediaCrawler 浏览器农场); 不可达/空/被风控 → 降级 NAS site_search
+        try:
+            from . import mediacrawler_client as _mc
+            if _mc.enabled():
+                res = _mc.scrape(platform, keyword or "", n)
+                if res is not None:
+                    sig = res.get("signal")
+                    if sig in ("captcha", "ban", "block"):
+                        try:
+                            from . import scrape_guard as _guard
+                            _guard.record(platform, sig)  # 风控信号喂熔断器
+                        except Exception:
+                            pass
+                    mc_items = res.get("items") or []
+                    if mc_items:
+                        for it in mc_items:
+                            it.setdefault("source", platform)
+                        return mc_items[:n]
+        except Exception:
+            pass
+        # 降级: PC 不可用 / PC 抓空 → NAS 本地 site_search
         items = site_search(domains, keyword or "", n=n)
         for it in items:
             it.setdefault("source", platform)
