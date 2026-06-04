@@ -85,15 +85,20 @@ def enrich_images(items: list[dict[str, Any]], max_fetch: int = 16) -> list[dict
 
 
 # ============================================================ 搜索引擎 (site: 限定)
-def _search_via_tavily(query: str, n: int = 10) -> list[dict[str, Any]]:
+def _search_via_tavily(query: str, n: int = 10, domains: list[str] | None = None) -> list[dict[str, Any]]:
     key = os.environ.get("TAVILY_API_KEY", "")
     if not key:
         return []
+    payload: dict[str, Any] = {
+        "api_key": key, "query": query, "max_results": n,
+        "search_depth": "basic", "include_images": True, "include_answer": False,
+    }
+    # Tavily 不解析查询里的 `site:` 操作符 → 必须用 include_domains 参数限定域名,
+    # 否则 (site:xiaohongshu.com) 这类查询直接 0 结果。
+    if domains:
+        payload["include_domains"] = domains
     with httpx.Client(timeout=HTTP_TIMEOUT) as c:
-        r = c.post("https://api.tavily.com/search", json={
-            "api_key": key, "query": query, "max_results": n,
-            "search_depth": "basic", "include_images": True, "include_answer": False,
-        })
+        r = c.post("https://api.tavily.com/search", json=payload)
         if r.status_code >= 400:
             return []
         data = r.json()
@@ -108,14 +113,19 @@ def _search_via_tavily(query: str, n: int = 10) -> list[dict[str, Any]]:
     return out
 
 
-def _search_via_brave(query: str, n: int = 10) -> list[dict[str, Any]]:
+def _search_via_brave(query: str, n: int = 10, domains: list[str] | None = None) -> list[dict[str, Any]]:
     key = os.environ.get("BRAVE_API_KEY", "")
     if not key:
         return []
+    # Brave 支持查询里的 site: 操作符 → 有域名时拼成 (site:a OR site:b) 限定。
+    q = query
+    if domains:
+        site_q = " OR ".join(f"site:{d}" for d in domains)
+        q = f"({site_q}) {query}".strip()
     headers = {"X-Subscription-Token": key, "Accept": "application/json"}
     with httpx.Client(timeout=HTTP_TIMEOUT, headers=headers) as c:
         r = c.get("https://api.search.brave.com/res/v1/web/search",
-                  params={"q": query, "count": n})
+                  params={"q": q, "count": n})
         if r.status_code >= 400:
             return []
         data = r.json()
@@ -132,19 +142,20 @@ def _search_via_brave(query: str, n: int = 10) -> list[dict[str, Any]]:
     return out
 
 
-def search_engine(query: str, n: int = 10) -> list[dict[str, Any]]:
-    """通用搜索: 先 tavily (带图) 再 brave 兜底."""
-    out = _search_via_tavily(query, n)
+def search_engine(query: str, n: int = 10, domains: list[str] | None = None) -> list[dict[str, Any]]:
+    """通用搜索: 先 tavily (带图) 再 brave 兜底. domains 给定时按域名限定。"""
+    out = _search_via_tavily(query, n, domains=domains)
     if not out:
-        out = _search_via_brave(query, n)
+        out = _search_via_brave(query, n, domains=domains)
     return out
 
 
 def site_search(domains: list[str], query: str, *, n: int = 8, enrich: bool = True) -> list[dict[str, Any]]:
-    """site:domain 限定搜索 + (可选) og:image 补图. 返回归一 list."""
-    site_q = " OR ".join(f"site:{d}" for d in domains)
-    full_q = f"({site_q}) {query}".strip()
-    results = search_engine(full_q, n)
+    """域名限定搜索 + (可选) og:image 补图. 返回归一 list.
+
+    经 search_engine(domains=...) 走 Tavily include_domains / Brave site: —
+    不再把 `site:` 塞进查询文本 (Tavily 不认 → 之前恒 0)。"""
+    results = search_engine(query, n, domains=domains)
     # 只保留命中目标域名的
     kept: list[dict[str, Any]] = []
     for it in results:
