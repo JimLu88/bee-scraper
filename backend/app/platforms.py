@@ -364,6 +364,8 @@ SITE_PLATFORMS: dict[str, list[str]] = {
     "zhihu":        ["zhihu.com"],
     "xiaohongshu":  ["xiaohongshu.com", "xhslink.com"],
     "douyin":       ["douyin.com"],
+    "kuaishou":     ["kuaishou.com", "gifshow.com"],
+    "tieba":        ["tieba.baidu.com"],
     "instagram":    ["instagram.com"],
     "tiktok":       ["tiktok.com"],
     "discord":      ["discord.com", "discord.gg"],
@@ -376,9 +378,16 @@ SITE_PLATFORMS: dict[str, list[str]] = {
     "pinterest":    ["pinterest.com"],
     "smzdm":        ["smzdm.com"],                    # 什么值得买
     "dianping":     ["dianping.com"],                 # 大众点评
+    "meituan":      ["meituan.com"],                  # 美团
     "mafengwo":     ["mafengwo.cn"],                  # 马蜂窝
+    "ctrip":        ["ctrip.com", "trip.com"],         # 携程
     "xiachufang":   ["xiachufang.com"],               # 下厨房
     "weixin":       ["mp.weixin.qq.com"],             # 微信公众号
+    "juejin":       ["juejin.cn"],                    # 掘金
+    "sspai":        ["sspai.com"],                    # 少数派
+    "_36kr":        ["36kr.com"],                     # 36氪
+    "huxiu":        ["huxiu.com"],                    # 虎嗅
+    "infoq":        ["infoq.cn"],                     # InfoQ 中文
     "medium":       ["medium.com"],
     "weibo":        ["weibo.com", "weibo.cn"],
     "xueqiu":       ["xueqiu.com"],                   # 雪球 (股票/投资)
