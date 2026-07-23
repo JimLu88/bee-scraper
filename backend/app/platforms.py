@@ -363,9 +363,14 @@ def fetch_youtube(query: str, n: int = 10) -> list[dict[str, Any]]:
 SITE_PLATFORMS: dict[str, list[str]] = {
     "zhihu":        ["zhihu.com"],
     "xiaohongshu":  ["xiaohongshu.com", "xhslink.com"],
+    "zhihu_site":        ["zhihu.com"],
+    "xiaohongshu_site":  ["xiaohongshu.com", "xhslink.com"],
     "douyin":       ["douyin.com"],
+    "douyin_site":  ["douyin.com"],
     "kuaishou":     ["kuaishou.com", "gifshow.com"],
+    "kuaishou_site":["kuaishou.com", "gifshow.com"],
     "tieba":        ["tieba.baidu.com"],
+    "tieba_site":   ["tieba.baidu.com"],
     "instagram":    ["instagram.com"],
     "tiktok":       ["tiktok.com"],
     "discord":      ["discord.com", "discord.gg"],
@@ -390,6 +395,7 @@ SITE_PLATFORMS: dict[str, list[str]] = {
     "infoq":        ["infoq.cn"],                     # InfoQ 中文
     "medium":       ["medium.com"],
     "weibo":        ["weibo.com", "weibo.cn"],
+    "weibo_site":   ["weibo.com", "weibo.cn"],
     "xueqiu":       ["xueqiu.com"],                   # 雪球 (股票/投资)
     "dribbble":     ["dribbble.com"],                 # 设计作品
     "xianyu":       ["goofish.com", "2.taobao.com"],  # 闲鱼 (二手/收藏)
