@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Callable
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -156,17 +157,18 @@ def site_search(domains: list[str], query: str, *, n: int = 8, enrich: bool = Tr
     经 search_engine(domains=...) 走 Tavily include_domains / Brave site: —
     不再把 `site:` 塞进查询文本 (Tavily 不认 → 之前恒 0)。"""
     results = search_engine(query, n, domains=domains)
-    # 只保留命中目标域名的
+    # 只保留真实命中目标域名的结果。平台搜索宁可为空，也不能把百度百科、
+    # 官网或其它媒体误标成小红书/知乎/大众点评。
     kept: list[dict[str, Any]] = []
     for it in results:
         url = str(it.get("url") or "")
-        if any(d in url for d in domains):
+        try:
+            host = (urlparse(url).hostname or "").lower().rstrip(".")
+        except ValueError:
+            host = ""
+        if any(host == d or host.endswith(f".{d}") for d in domains):
             it["kind"] = "site"
             kept.append(it)
-    if not kept:  # 域名过滤后空 → 放宽 (搜索引擎已加 site: 提示, 直接用)
-        for it in results:
-            it["kind"] = "site"
-        kept = results
     if enrich:
         kept = enrich_images(kept, max_fetch=16)
     return kept[:n]
