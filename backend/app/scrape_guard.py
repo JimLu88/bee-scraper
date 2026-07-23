@@ -10,7 +10,8 @@
   empty    返回 0 条(可能被降级/风控,也可能正常无结果 → 看连续次数)
   block    403 / 429 / 风控拦截页
   captcha  命中验证码(浏览器层接入后上报)
-  ban      账号被封 / 登录态失效(浏览器层上报)→ 立即熔断
+  auth_expired 登录态过期，需要扫码续期；不属于封禁，不触发熔断
+  ban      账号明确被封(浏览器层上报)→ 立即熔断
 
 阈值(环境变量可调):
   GUARD_DISABLED=1        关闭熔断(不建议)
@@ -132,7 +133,7 @@ def record(platform: str, signal: str) -> dict[str, Any] | None:
         # 判定熔断
         reason = ""
         if signal == "ban":
-            reason = "账号被封 / 登录态失效(ban)"
+            reason = "账号明确被封(ban)"
         else:
             n_block = sum(1 for _, s in events if s == "block")
             n_captcha = sum(1 for _, s in events if s == "captcha")
