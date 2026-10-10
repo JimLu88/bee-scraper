@@ -35,6 +35,14 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 HTTP_TIMEOUT = float(os.environ.get("BEE_SCRAPER_TIMEOUT", "20"))
 UA = "bee-scraper/0.2 (+https://github.com/h-semas)"
 
+# 单个搜索源(tavily/brave/exa)抓取条数. 默认 20: tavily+exa 两源 ≈ 40 原始,
+# 去重后约 30-40 落到信息流 (配合 media_aggregator 的质检过滤). env 可调。
+# Tavily basic 上限 20; 取更大值时各源按自身上限收敛, 不会报错。
+try:
+    WEB_N = max(5, min(30, int(os.environ.get("BEE_WEB_N", "20"))))
+except Exception:
+    WEB_N = 20
+
 _BASE_IMPL_SITES = {"hacker_news", "arxiv", "github_trending", "huggingface", "weibo_hot"}
 # v0.3: 多平台 fetcher 由 platforms 模块提供 (原生 + site:); 这些现在都是「真实现」.
 _PLATFORM_SITES = set(_plat.all_platform_fetchers().keys())
@@ -189,7 +197,7 @@ def _search_tavily(query: str) -> list[dict[str, Any]]:
         raise HTTPException(501, "TAVILY_API_KEY not set")
     with httpx.Client(timeout=HTTP_TIMEOUT) as c:
         r = c.post("https://api.tavily.com/search", json={
-            "api_key": key, "query": query, "max_results": 10,
+            "api_key": key, "query": query, "max_results": WEB_N,
             "search_depth": "basic", "include_answer": False, "include_images": True,
         })
         r.raise_for_status()
@@ -211,7 +219,7 @@ def _search_brave(query: str) -> list[dict[str, Any]]:
     headers = {"X-Subscription-Token": key, "Accept": "application/json"}
     with httpx.Client(timeout=HTTP_TIMEOUT, headers=headers) as c:
         r = c.get("https://api.search.brave.com/res/v1/web/search",
-                  params={"q": query, "count": 10})
+                  params={"q": query, "count": WEB_N})
         r.raise_for_status()
         data = r.json()
     return [{
@@ -229,7 +237,7 @@ def _search_exa(query: str) -> list[dict[str, Any]]:
     headers = {"x-api-key": key, "Content-Type": "application/json"}
     with httpx.Client(timeout=HTTP_TIMEOUT, headers=headers) as c:
         r = c.post("https://api.exa.ai/search",
-                   json={"query": query, "num_results": 10, "type": "auto"})
+                   json={"query": query, "num_results": WEB_N, "type": "auto"})
         r.raise_for_status()
         data = r.json()
     return [{
