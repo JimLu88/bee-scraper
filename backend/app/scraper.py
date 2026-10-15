@@ -387,3 +387,33 @@ def list_sites() -> dict:
         "search_implemented": sorted(IMPL_SEARCH),
         "search_stub": sorted(STUB_SEARCH),
     }
+
+
+class DatasetRequest(BaseModel):
+    task_id: str = ""
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    fields: dict[str, str] = Field(default_factory=dict)
+    contains: str = ""
+    unique_by: list[str] = Field(default_factory=list)
+    sort_by: str = ""
+    descending: bool = False
+
+
+@router.post("/data/transform")
+def transform_data(req: DatasetRequest) -> dict:
+    from .dataset_export import transform
+    items = get_data(req.task_id).get("items", []) if req.task_id else req.items
+    rows = transform(items, req.fields, req.contains, req.unique_by, req.sort_by, req.descending)
+    return {"items": rows, "input_count": len(items), "count": len(rows), "fields": list(req.fields)}
+
+
+@router.post("/data/export")
+def export_data(req: DatasetRequest, format: str = "csv"):
+    from fastapi.responses import Response
+    from .dataset_export import to_csv
+    if format not in ("csv", "json"):
+        raise HTTPException(400, "format must be csv or json")
+    result = transform_data(req)
+    body = to_csv(result["items"], list(req.fields)) if format == "csv" else json.dumps(result, ensure_ascii=False, indent=2)
+    return Response(body, media_type="text/csv; charset=utf-8" if format == "csv" else "application/json",
+                    headers={"Content-Disposition": f'attachment; filename="scraper-results.{format}"'})
